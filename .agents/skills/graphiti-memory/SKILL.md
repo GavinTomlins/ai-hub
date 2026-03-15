@@ -109,60 +109,93 @@ This skill requires a running Graphiti MCP server. Two backend options are avail
 
 #### Step 1: Create Docker Compose File
 
-Create `~/ai-hub/graphiti/docker-compose.yml`:
+Based on the production-tested configuration from ailocalstack, create `~/ai-hub/graphiti/docker-compose.yml`:
+
+**Option A: Neo4j Backend (Recommended for Production)**
 
 ```yaml
+version: '3.8'
+
 services:
-  graph:
-    image: graphiti/graphiti-mcp:latest
+  neo4j:
+    image: neo4j:5.26.0
     ports:
-      - "8000:8000"
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-demodemo}
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1G
+      - NEO4J_server_memory_pagecache_size=512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')"]
+      test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
+
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:standalone
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       neo4j:
         condition: service_healthy
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti}
-      - PORT=8000
-      - db_backend=neo4j
-
-  neo4j:
-    image: neo4j:5.26.2
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
-      interval: 1s
-      timeout: 10s
-      retries: 10
-      start_period: 3s
+      # Database configuration
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-demodemo}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      # Application configuration
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-main}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
+      - CONFIG_PATH=/app/mcp/config/config.yaml
+      - PATH=/root/.local/bin:${PATH}
     ports:
-      - "7474:7474"  # HTTP browser
-      - "7687:7687"  # Bolt protocol
-    volumes:
-      - neo4j_data:/data
-    environment:
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-graphiti}
+      - "8000:8000" # MCP server HTTP transport
+    command: ["uv", "run", "main.py"]
 
 volumes:
   neo4j_data:
+  neo4j_logs:
 ```
 
-#### Step 2: Set Environment Variables
+#### Step 2: Create Environment File
+
+Create `~/ai-hub/graphiti/.env`:
 
 ```bash
-# Add to ~/.zshrc or ~/.bashrc
-export OPENAI_API_KEY="sk-your-openai-api-key"
-export NEO4J_PASSWORD="your-secure-password"  # Optional, defaults to 'graphiti'
+# Required for embeddings
+OPENAI_API_KEY=sk-your-openai-api-key-here
 
-# Reload shell configuration
-source ~/.zshrc  # or source ~/.bashrc
+# Neo4j Configuration (if using Neo4j backend)
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=demodemo
+NEO4J_DATABASE=neo4j
+NEO4J_PORT=7687
+
+# FalkorDB Configuration (if using FalkorDB backend)
+FALKORDB_URI=redis://falkordb:6379
+FALKORDB_PASSWORD=
+FALKORDB_DATABASE=default_db
+
+# Graphiti Application Settings
+GRAPHITI_GROUP_ID=main
+SEMAPHORE_LIMIT=10
+USE_PARALLEL_RUNTIME=true
+MAX_REFLEXION_ITERATIONS=3
+
+# Optional: Additional API keys
+ANTHROPIC_API_KEY=
 ```
+
+**Note:** The MCP server reads these variables from the `.env` file via Docker Compose.
 
 #### Step 3: Start the MCP Server
 
@@ -174,7 +207,7 @@ docker-compose up -d
 docker-compose ps
 
 # View logs
-docker-compose logs -f graph
+docker-compose logs -f graphiti-mcp
 ```
 
 #### Step 4: Verify MCP Server is Running
@@ -183,54 +216,62 @@ docker-compose logs -f graph
 # Check health endpoint
 curl http://127.0.0.1:8000/health
 
+# Check MCP server status
+curl http://127.0.0.1:8000/status
+
 # Expected output:
-# {"status": "healthy"}
+# {"status": "healthy", "database": "connected"}
 ```
 
-### Alternative: FalkorDB Backend
+### Alternative: FalkorDB Backend (Lightweight)
 
-For a lighter-weight option using FalkorDB (Redis-compatible):
+For a lighter-weight option (~500MB vs 2-4GB for Neo4j):
 
 ```yaml
+version: '3.8'
+
 services:
   falkordb:
     image: falkordb/falkordb:latest
     ports:
-      - "6379:6379"
+      - "6379:6379" # Redis/FalkorDB port
+      - "3000:3000" # FalkorDB web UI
+    environment:
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-}
     volumes:
       - falkordb_data:/data
-    environment:
-      - FALKORDB_ARGS=--port 6379 --cluster-enabled no
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "6379", "ping"]
-      interval: 1s
-      timeout: 10s
-      retries: 10
-      start_period: 3s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  graph-falkordb:
-    image: graphiti/graphiti-mcp:latest
-    ports:
-      - "8001:8001"
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:standalone
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       falkordb:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/healthcheck')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - FALKORDB_DATABASE=default_db
-      - GRAPHITI_BACKEND=falkordb
-      - PORT=8001
-      - db_backend=falkordb
+      # Database configuration
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-default_db}
+      # Application configuration
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-main}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
+      - CONFIG_PATH=/app/mcp/config/config.yaml
+      - PATH=/root/.local/bin:${PATH}
+    ports:
+      - "8000:8000" # MCP server HTTP transport
+    command: ["uv", "run", "main.py"]
 
 volumes:
   falkordb_data:
+    driver: local
 ```
 
 Start with: `docker-compose up -d`

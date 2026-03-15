@@ -71,50 +71,56 @@ Create `docker-compose.yml`:
 version: '3.8'
 
 services:
-  graph:
-    image: graphiti/graphiti-mcp:latest
-    container_name: graphiti-mcp
-    ports:
-      - "8000:8000"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      neo4j:
-        condition: service_healthy
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti}
-      - PORT=8000
-      - db_backend=neo4j
-    networks:
-      - graphiti-network
-
   neo4j:
-    image: neo4j:5.26.2
+    image: neo4j:5.26.0
     container_name: graphiti-neo4j
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
-      interval: 1s
-      timeout: 10s
-      retries: 10
-      start_period: 3s
+      test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     ports:
       - "7474:7474"  # HTTP browser
       - "7687:7687"  # Bolt protocol
     volumes:
       - neo4j_data:/data
+      - neo4j_logs:/logs
     environment:
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-graphiti}
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-demodemo}
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1G
+      - NEO4J_server_memory_pagecache_size=512m
+    networks:
+      - graphiti-network
+
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:standalone
+    container_name: graphiti-mcp
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-demodemo}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-main}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
+      - CONFIG_PATH=/app/mcp/config/config.yaml
+      - PATH=/root/.local/bin:${PATH}
+    ports:
+      - "8000:8000"  # MCP server HTTP transport
+    command: ["uv", "run", "main.py"]
     networks:
       - graphiti-network
 
 volumes:
   neo4j_data:
+  neo4j_logs:
 
 networks:
   graphiti-network:
@@ -133,46 +139,47 @@ services:
     image: falkordb/falkordb:latest
     container_name: graphiti-falkordb
     ports:
-      - "6379:6379"
+      - "6379:6379"  # Redis/FalkorDB port
+      - "3000:3000"  # FalkorDB web UI (shown in screenshot)
     volumes:
       - falkordb_data:/data
     environment:
-      - FALKORDB_ARGS=--port 6379 --cluster-enabled no
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-}
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "6379", "ping"]
-      interval: 1s
-      timeout: 10s
-      retries: 10
-      start_period: 3s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - graphiti-network
 
-  graph-falkordb:
-    image: graphiti/graphiti-mcp:latest
-    container_name: graphiti-mcp-falkor
-    ports:
-      - "8001:8001"
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:standalone
+    container_name: graphiti-mcp
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       falkordb:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/healthcheck')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - FALKORDB_DATABASE=default_db
-      - GRAPHITI_BACKEND=falkordb
-      - PORT=8001
-      - db_backend=falkordb
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-default_db}
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-main}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
+      - CONFIG_PATH=/app/mcp/config/config.yaml
+      - PATH=/root/.local/bin:${PATH}
+    ports:
+      - "8000:8000"  # MCP server HTTP transport
+    command: ["uv", "run", "main.py"]
     networks:
       - graphiti-network
 
 volumes:
   falkordb_data:
+    driver: local
 
 networks:
   graphiti-network:
@@ -181,29 +188,51 @@ networks:
 
 ### Step 3: Configure Environment Variables
 
-Create `~/.ai-hub-env`:
+Create `~/ai-hub/graphiti/.env` in the same directory as docker-compose.yml:
 
 ```bash
-# Required
-export OPENAI_API_KEY="sk-your-openai-api-key-here"
+# Required for embeddings (OpenAI API key)
+OPENAI_API_KEY=sk-your-openai-api-key-here
 
-# Optional (Neo4j only)
-export NEO4J_PASSWORD="your-secure-password"
+# Neo4j Configuration (if using Neo4j backend)
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=demodemo
+NEO4J_DATABASE=neo4j
+NEO4J_PORT=7687
+
+# FalkorDB Configuration (if using FalkorDB backend)
+FALKORDB_URI=redis://falkordb:6379
+FALKORDB_PASSWORD=
+FALKORDB_DATABASE=default_db
+
+# Graphiti Application Settings
+GRAPHITI_GROUP_ID=main
+SEMAPHORE_LIMIT=10
+USE_PARALLEL_RUNTIME=true
+MAX_REFLEXION_ITERATIONS=3
+
+# Optional: Additional API keys for extended features
+ANTHROPIC_API_KEY=
 ```
 
-Add to your shell profile:
+**Important:** Based on the production-tested ailocalstack configuration (shown in screenshot), the MCP server reads these environment variables directly from the `.env` file via Docker Compose's `env_file` directive.
+
+**Port Reference:**
+- MCP Server: `8000` (HTTP SSE endpoint)
+- Neo4j HTTP: `7474` (Browser interface)
+- Neo4j Bolt: `7687` (Database protocol)
+- FalkorDB Redis: `6379` (Database protocol)
+- FalkorDB Web UI: `3000` (Browser interface)
+
+Verify configuration file exists:
 
 ```bash
-# Add to ~/.zshrc or ~/.bashrc
-echo 'source ~/.ai-hub-env' >> ~/.zshrc
-source ~/.zshrc
-```
+ls -la ~/ai-hub/graphiti/.env
+# Should show the .env file
 
-Verify environment:
-
-```bash
-echo $OPENAI_API_KEY | cut -c1-10
-echo $NEO4J_PASSWORD
+cat ~/ai-hub/graphiti/.env | grep -E "^(OPENAI_API_KEY|NEO4J_|FALKORDB_)" | cut -d= -f1
+# Should list all configured variables
 ```
 
 ### Step 4: Start MCP Server
