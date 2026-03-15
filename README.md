@@ -82,7 +82,7 @@ See individual skill documentation for platform-specific setup:
 
 ## Available Skills
 
-### auto-worklog
+### auto-worklog ⭐ REQUIRED
 
 **AUTOMATIC worklog initialization** - Creates worklog entry at start of every session.
 
@@ -95,8 +95,43 @@ See individual skill documentation for platform-specific setup:
   - Prompt and user feedback logging
   - Timezone-aware timestamps
   - Cross-platform path resolution
+- **Quick Start:** [Installation Guide](#installation) → [OpenCode Integration](docs/OPENCODE_INTEGRATION.md)
 
 [View Documentation →](.agents/skills/auto-worklog/SKILL.md)
+
+### graphiti-memory (Node Sage) 🧠 OPTIONAL
+
+**Persistent memory storage** - Enables cross-session context and team knowledge sharing.
+
+- **Auto-Trigger:** Optional (when MCP server available)
+- **Platforms:** OpenCode ✅, Claude Code ⚠️, Claude Desktop ⚠️, ChatGPT ❌, n8n 🧪, OpenClaw 🧪
+- **Requirements:** MCP server (Neo4j or FalkorDB backend)
+- **Features:**
+  - Cross-session memory persistence
+  - Semantic search via graph database
+  - Team knowledge sharing
+  - Integration with auto-worklog for enriched context
+- **Best For:** Long-running projects, team collaboration, complex context
+- **Setup Time:** 10-15 minutes (MCP server deployment)
+- **Quick Start:** [MCP Setup Guide](docs/NODE_SAGE_INTEGRATION.md#mcp-server-setup) → [OpenCode Configuration](docs/NODE_SAGE_INTEGRATION.md#opencode-configuration)
+
+[View Documentation →](.agents/skills/graphiti-memory/SKILL.md) | [Setup Guide →](docs/NODE_SAGE_INTEGRATION.md)
+
+### Skill Relationships
+
+```
+auto-worklog (REQUIRED)
+├── Creates worklog on every session
+├── Tracks work progress
+└── Works standalone
+
+graphiti-memory (OPTIONAL)
+├── Provides persistent memory
+├── Enriches auto-worklog context
+└── Requires MCP server
+
+Recommended: Start with auto-worklog, add Node Sage later
+```
 
 ## Repository Structure
 
@@ -104,12 +139,27 @@ See individual skill documentation for platform-specific setup:
 ai-hub/
 ├── .agents/
 │   └── skills/
-│       └── auto-worklog/
-│           └── SKILL.md          # Skill definition
-├── .gitignore                     # Git ignore rules
-├── LICENSE                        # Apache 2.0 License
-└── README.md                      # This file
+│       ├── auto-worklog/         # Required: Automatic worklog
+│       │   └── SKILL.md
+│       └── graphiti-memory/      # Optional: Persistent memory
+│           └── SKILL.md
+├── docs/
+│   ├── OPENCODE_INTEGRATION.md   # OpenCode setup guide
+│   └── NODE_SAGE_INTEGRATION.md  # Node Sage MCP setup
+├── .gitignore                    # Git ignore rules
+├── LICENSE                       # Apache 2.0 License
+└── README.md                     # This file
 ```
+
+## Documentation Index
+
+| Document | Purpose | Skill |
+|----------|---------|-------|
+| [README.md](README.md) | Overview and quick start | All |
+| [SKILL.md](.agents/skills/auto-worklog/SKILL.md) | auto-worklog reference | auto-worklog |
+| [SKILL.md](.agents/skills/graphiti-memory/SKILL.md) | Node Sage reference | graphiti-memory |
+| [OPENCODE_INTEGRATION.md](docs/OPENCODE_INTEGRATION.md) | OpenCode installation | auto-worklog |
+| [NODE_SAGE_INTEGRATION.md](docs/NODE_SAGE_INTEGRATION.md) | MCP server setup | graphiti-memory |
 
 ## Installation
 
@@ -212,13 +262,60 @@ If you're using [oh-my-opencode](https://github.com/opencode/oh-my-opencode), in
    mkdir -p ~/.local/share/ai-hub/worklog/
    ```
 
+### Optional: Add Node Sage (Enhanced Context)
+
+For persistent memory across sessions, add Node Sage:
+
+1. **Set up MCP Server** (10-15 minutes):
+   ```bash
+   # Follow detailed setup guide
+   # See: docs/NODE_SAGE_INTEGRATION.md
+   ```
+
+2. **Add Node Sage to AGENTS.md** (Optional):
+   ```markdown
+   ### Startup Behavior (Every Prompt)
+   
+   On every user interaction:
+   
+   1. **worklogger** (REQUIRED) - Creates worklog entry
+      - Auto-triggered on work intent detection
+      - Source: auto-worklog skill
+   
+   2. **Node Sage** (OPTIONAL) - Loads persistent memory
+      - Available when MCP server running
+      - Falls back gracefully if unavailable
+      - Source: graphiti-memory skill
+      - Enriches worklog with cross-session context
+   ```
+
+3. **Configure Environment:**
+   ```bash
+   # Required for Node Sage
+   export OPENAI_API_KEY="sk-your-api-key"
+   
+   # Optional for Neo4j
+   export NEO4J_PASSWORD="secure-password"
+   ```
+
+[Full Node Sage Setup Guide →](docs/NODE_SAGE_INTEGRATION.md)
+
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AUTO_WORKLOG_DIR` | Worklog storage directory | `~/.local/share/ai-hub/worklog/` |
+#### auto-worklog
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `AUTO_WORKLOG_DIR` | Worklog storage directory | `~/.local/share/ai-hub/worklog/` | No |
+
+#### graphiti-memory (Node Sage) - Optional
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OPENAI_API_KEY` | OpenAI API key for embeddings | - | **Yes** (for MCP) |
+| `NEO4J_PASSWORD` | Neo4j database password | `graphiti` | No |
 
 ### Platform-Specific Paths
 
@@ -260,10 +357,41 @@ You may obtain a copy of the License at
 
 ## Roadmap
 
+- [x] auto-worklog skill with cross-platform support
+- [x] graphiti-memory (Node Sage) skill with MCP integration
+- [x] Comprehensive documentation and setup guides
 - [ ] Additional cross-platform skills
 - [ ] MCP server implementations
 - [ ] Automated testing across platforms
 - [ ] Video tutorials for each platform
+
+---
+
+## Quick Reference
+
+**Get started in 5 minutes:**
+```bash
+# 1. Clone repository
+git clone https://github.com/GavinTomlins/ai-hub.git ~/repos/personal/ai-hub
+
+# 2. Install auto-worklog (REQUIRED)
+mkdir -p ~/.agents/skills
+ln -s ~/repos/personal/ai-hub/.agents/skills/auto-worklog ~/.agents/skills/
+ln -s ~/.agents/skills ~/.config/opencode/skills
+
+# 3. Create worklog directory
+mkdir -p ~/.local/share/ai-hub/worklog/
+
+# 4. Update AGENTS.md (see docs/OPENCODE_INTEGRATION.md)
+
+# 5. Done! Test with: "Work on my project"
+```
+
+**Add Node Sage later (optional):**
+```bash
+# Follow detailed guide
+# See: docs/NODE_SAGE_INTEGRATION.md
+```
 
 ---
 
