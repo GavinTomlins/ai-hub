@@ -140,7 +140,7 @@ services:
     container_name: graphiti-falkordb
     ports:
       - "6379:6379"  # Redis/FalkorDB port
-      - "3000:3000"  # FalkorDB web UI (shown in screenshot)
+      - "3000:3000"  # FalkorDB web UI
     volumes:
       - falkordb_data:/data
     environment:
@@ -216,7 +216,7 @@ MAX_REFLEXION_ITERATIONS=3
 ANTHROPIC_API_KEY=
 ```
 
-**Important:** Based on the production-tested ailocalstack configuration (shown in screenshot), the MCP server reads these environment variables directly from the `.env` file via Docker Compose's `env_file` directive.
+**Important:** Based on the production-tested ailocalstack configuration, the MCP server reads these environment variables directly from the `.env` file via Docker Compose's `env_file` directive. The running configuration uses `zepai/knowledge-graph-mcp:standalone` on port 8000.
 
 **Port Reference:**
 - MCP Server: `8000` (HTTP SSE endpoint)
@@ -249,13 +249,16 @@ sleep 30
 
 # Check status
 docker-compose ps
+
+# View logs
+docker-compose logs -f graphiti-mcp
 ```
 
 **Expected Output:**
 ```
 NAME                COMMAND                  SERVICE             STATUS              PORTS
-graphiti-mcp        "python -m graphiti…"    graph               running (healthy)   0.0.0.0:8000->8000/tcp
-graphiti-neo4j      "tini -g -- /startup…"   neo4j               running (healthy)   0.0.0.0:7474->7474/tcp, 0.0.0.0:7687->7687/tcp
+graphiti-mcp        "uv run main.py"         graphiti-mcp        running (healthy)   0.0.0.0:8000->8000/tcp
+graphiti-neo4j      "/startup/docker-entr…"  neo4j               running (healthy)   0.0.0.0:7474->7474/tcp, 0.0.0.0:7687->7687/tcp
 ```
 
 ### Step 5: Verify MCP Server

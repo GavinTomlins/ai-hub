@@ -201,13 +201,26 @@ ANTHROPIC_API_KEY=
 
 ```bash
 cd ~/ai-hub/graphiti
+
+# Start services
 docker-compose up -d
 
-# Wait for services to be healthy (about 30-60 seconds)
+# Wait for initialization (30-60 seconds)
+echo "Waiting for services to be healthy..."
+sleep 30
+
+# Check status
 docker-compose ps
 
 # View logs
 docker-compose logs -f graphiti-mcp
+```
+
+**Expected Output:**
+```
+NAME                COMMAND                  SERVICE             STATUS              PORTS
+graphiti-mcp        "uv run main.py"         graphiti-mcp        running (healthy)   0.0.0.0:8000->8000/tcp
+graphiti-neo4j      "/startup/docker-entr…"  neo4j               running (healthy)   0.0.0.0:7474->7474/tcp, 0.0.0.0:7687->7687/tcp
 ```
 
 #### Step 4: Verify MCP Server is Running

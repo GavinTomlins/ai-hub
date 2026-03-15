@@ -12,6 +12,20 @@ A collection of portable, platform-agnostic skills for AI agents across OpenCode
 📧 gavintomlins+ai-hub@gmail.com  
 🔗 https://github.com/GavinTomlins/ai-hub
 
+## Related Projects & References
+
+This repository integrates with and builds upon the following open-source projects:
+
+| Project | Description | Repository | Documentation |
+|---------|-------------|------------|---------------|
+| **OpenCode** | AI coding agent for the terminal | [anomalyco/opencode](https://github.com/anomalyco/opencode) | [OpenCode Docs](https://github.com/anomalyco/opencode) |
+| **Oh-My-OpenCode** | Agent harness and plugin system for OpenCode | [code-yeongyu/oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) | [OMO Docs](https://github.com/code-yeongyu/oh-my-openagent) |
+| **Graphiti** | Real-time knowledge graphs for AI agents | [getzep/graphiti](https://github.com/getzep/graphiti) | [Graphiti Docs](https://help.getzep.com/graphiti) |
+| **FalkorDB** | Low-latency graph database (Redis-compatible) | [FalkorDB/falkordb](https://github.com/FalkorDB/falkordb) | [FalkorDB Docs](https://docs.falkordb.com) |
+| **Neo4j** | Native graph database with Cypher query language | [neo4j/neo4j](https://github.com/neo4j/neo4j) | [Neo4j Docs](https://neo4j.com/docs/) |
+
+*AI-Hub provides pre-configured skills and integration patterns for these technologies, tested in production environments.*
+
 ## Overview
 
 This repository contains production-ready skills that work across multiple AI platforms. Each skill is designed with:
